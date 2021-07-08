@@ -1,7 +1,9 @@
 import serial
 import pyubx2
-from pyubx2 import UBXMessage
+from pyubx2 import UBXMessage, UBXReader
 from serial import PARITY_NONE, EIGHTBITS, STOPBITS_ONE
+
+ack_msg = UBXReader.parse(b'\xb5b\x05\x01\x02\x00\x06\x01\x0f\x38')
 
 geofence = [
     ("CFG_GEOFENCE_CONFLVL", 0),

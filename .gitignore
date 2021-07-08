@@ -133,7 +133,6 @@ dmypy.json
 
 # UBX
 UBX/theirubxstreamer.py
-UBX/scratch.py
 UBX/ubxcfgval.py
 UBX/ubxconfig.py
 UBX/ubxprotocol.py

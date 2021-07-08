@@ -170,6 +170,7 @@ class UBXStreamer:
     def send_setmsg(self, msg: 'UBXMessage'):
         """
         Easy way to send one SET message that's passed in.
+        That is, a CFG-XXX SET message -> Expect a ACK-ACK in return
         """
         if msg.msgmode != 1:  # mode = 1 is SET
             raise ValueError(f"msg is of type {msg.msgmode} not 'SET'")
