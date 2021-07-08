@@ -1,0 +1,715 @@
+import serial
+import pyubx2
+from pyubx2 import UBXMessage
+from serial import PARITY_NONE, EIGHTBITS, STOPBITS_ONE
+
+geofence = [
+    ("CFG_GEOFENCE_CONFLVL", 0),
+    ("CFG_GEOFENCE_USE_PIO", 0),
+    ("CFG_GEOFENCE_PINPOL", 0),
+    ("CFG_GEOFENCE_PIN", 3),
+    ("CFG_GEOFENCE_USE_FENCE1", 0),
+    ("CFG_GEOFENCE_FENCE1_LAT", 0),
+    ("CFG_GEOFENCE_FENCE1_LON", 0),
+    ("CFG_GEOFENCE_FENCE1_RAD", 0),
+    ("CFG_GEOFENCE_USE_FENCE2", 0),
+    ("CFG_GEOFENCE_FENCE2_LAT", 0),
+    ("CFG_GEOFENCE_FENCE2_LON", 0),
+    ("CFG_GEOFENCE_FENCE2_RAD", 0),
+    ("CFG_GEOFENCE_USE_FENCE3", 0),
+    ("CFG_GEOFENCE_FENCE3_LAT", 0),
+    ("CFG_GEOFENCE_FENCE3_LON", 0),
+    ("CFG_GEOFENCE_FENCE3_RAD", 0),
+    ("CFG_GEOFENCE_USE_FENCE4", 0),
+    ("CFG_GEOFENCE_FENCE4_LAT", 0),
+    ("CFG_GEOFENCE_FENCE4_LON", 0),
+    ("CFG_GEOFENCE_FENCE4_RAD", 0)
+]
+
+hw = [
+    ("CFG_HW_ANT_CFG_VOLTCTRL", 0),
+    ("CFG_HW_ANT_CFG_SHORTDET", 0),
+    ("CFG_HW_ANT_CFG_SHORTDET_POL", 1),
+    ("CFG_HW_ANT_CFG_OPENDET", 0),
+    ("CFG_HW_ANT_CFG_OPENDET_POL", 1),
+    ("CFG_HW_ANT_CFG_PWRDOWN", 0),
+    ("CFG_HW_ANT_CFG_PWRDOWN_POL", 1),
+    ("CFG_HW_ANT_CFG_RECOVER", 0)
+]
+
+i2c = [
+    ("CFG_I2C_ADDRESS", 132),
+    ("CFG_I2C_EXTENDEDTIMEOUT", 0),
+    ("CFG_I2C_ENABLED", 0),
+    ("CFG_I2CINPROT_UBX", 1),
+    ("CFG_I2CINPROT_NMEA", 1),
+    ("CFG_I2CINPROT_RTCM3X", 1),
+    ("CFG_I2COUTPROT_UBX", 1),
+    ("CFG_I2COUTPROT_NMEA", 1),
+    ("CFG_I2COUTPROT_RTCM3X", 1)
+]
+
+infmsg = [
+    ("CFG_INFMSG_UBX_I2C", b'\x00'),
+    ("CFG_INFMSG_UBX_UART1", b'\x00'),
+    ("CFG_INFMSG_UBX_UART2", b'\x00'),
+    ("CFG_INFMSG_UBX_USB", b'\x00'),
+    ("CFG_INFMSG_UBX_SPI", b'\x00'),
+    ("CFG_INFMSG_NMEA_I2C", b'\x07'),
+    ("CFG_INFMSG_NMEA_UART1", b'\x07'),
+    ("CFG_INFMSG_NMEA_UART2", b'\x07'),
+    ("CFG_INFMSG_NMEA_USB", b'\x07'),
+    ("CFG_INFMSG_NMEA_SPI", b'\x07')
+]
+
+itfm = [
+    ("CFG_ITFM_BBTHRESHOLD", 3),
+    ("CFG_ITFM_CWTHRESHOLD", 15),
+    ("CFG_ITFM_ENABLE", 0),
+    ("CFG_ITFM_ANTSETTING", 0),
+    ("CFG_ITFM_ENABLE_AUX", 0)
+]
+
+logfilter = [
+    ("CFG_LOGFILTER_RECORD_ENA", 0),
+    ("CFG_LOGFILTER_ONCE_PER_WAKE_UP_ENA", 0),
+    ("CFG_LOGFILTER_APPLY_ALL_FILTERS", 0),
+    ("CFG_LOGFILTER_MIN_INTERVAL", 0),
+    ("CFG_LOGFILTER_TIME_THRS", 0),
+    ("CFG_LOGFILTER_SPEED_THRS", 0),
+    ("CFG_LOGFILTER_POSITION_THRS", 0)
+]
+
+mot = [
+    ("CFG_MOT_GNSSSPEED_THRS", 0),
+    ("CFG_MOT_GNSSDIST_THRS", 0)
+]
+
+msgout = [
+    ("CFG_MSGOUT_NMEA_ID_DTM_I2C", 0),
+    ("CFG_MSGOUT_NMEA_ID_DTM_SPI", 0),
+    ("CFG_MSGOUT_NMEA_ID_DTM_UART1", 0),
+    ("CFG_MSGOUT_NMEA_ID_DTM_UART2", 0),
+    ("CFG_MSGOUT_NMEA_ID_DTM_USB", 0),
+    ("CFG_MSGOUT_NMEA_ID_GBS_I2C", 0),
+    ("CFG_MSGOUT_NMEA_ID_GBS_SPI", 0),
+    ("CFG_MSGOUT_NMEA_ID_GBS_UART1", 0),
+    ("CFG_MSGOUT_NMEA_ID_GBS_UART2", 0),
+    ("CFG_MSGOUT_NMEA_ID_GBS_USB", 0),
+    ("CFG_MSGOUT_NMEA_ID_GGA_I2C", 0),  #HERE: Altered
+    ("CFG_MSGOUT_NMEA_ID_GGA_SPI", 0),  #HERE: Altered
+    ("CFG_MSGOUT_NMEA_ID_GGA_UART1", 0),  #HERE: Altered
+    ("CFG_MSGOUT_NMEA_ID_GGA_UART2", 0),  #HERE: Altered
+    ("CFG_MSGOUT_NMEA_ID_GGA_USB", 0),  #HERE: Altered
+    ("CFG_MSGOUT_NMEA_ID_GLL_I2C", 0),  #HERE: Altered
+    ("CFG_MSGOUT_NMEA_ID_GLL_SPI", 0),  #HERE: Altered
+    ("CFG_MSGOUT_NMEA_ID_GLL_UART1", 0),  #HERE: Altered
+    ("CFG_MSGOUT_NMEA_ID_GLL_UART2", 0),  #HERE: Altered
+    ("CFG_MSGOUT_NMEA_ID_GLL_USB", 0),  #HERE: Altered
+    ("CFG_MSGOUT_NMEA_ID_GNS_I2C", 0),
+    ("CFG_MSGOUT_NMEA_ID_GNS_SPI", 0),
+    ("CFG_MSGOUT_NMEA_ID_GNS_UART1", 0),
+    ("CFG_MSGOUT_NMEA_ID_GNS_UART2", 0),
+    ("CFG_MSGOUT_NMEA_ID_GNS_USB", 0),
+    ("CFG_MSGOUT_NMEA_ID_GRS_I2C", 0),
+    ("CFG_MSGOUT_NMEA_ID_GRS_SPI", 0),
+    ("CFG_MSGOUT_NMEA_ID_GRS_UART1", 0),
+    ("CFG_MSGOUT_NMEA_ID_GRS_UART2", 0),
+    ("CFG_MSGOUT_NMEA_ID_GRS_USB", 0),
+    ("CFG_MSGOUT_NMEA_ID_GSA_I2C", 0),  # HERE: Altered
+    ("CFG_MSGOUT_NMEA_ID_GSA_SPI", 0),  # HERE: Altered
+    ("CFG_MSGOUT_NMEA_ID_GSA_UART1", 0),  # HERE: Altered
+    ("CFG_MSGOUT_NMEA_ID_GSA_UART2", 0),  # HERE: Altered
+    ("CFG_MSGOUT_NMEA_ID_GSA_USB", 0),  # HERE: Altered
+    ("CFG_MSGOUT_NMEA_ID_GST_I2C", 0),
+    ("CFG_MSGOUT_NMEA_ID_GST_SPI", 0),
+    ("CFG_MSGOUT_NMEA_ID_GST_UART1", 0),
+    ("CFG_MSGOUT_NMEA_ID_GST_UART2", 0),
+    ("CFG_MSGOUT_NMEA_ID_GST_USB", 0),
+    ("CFG_MSGOUT_NMEA_ID_GSV_I2C", 0),  # HERE: Altered
+    ("CFG_MSGOUT_NMEA_ID_GSV_SPI", 0),  # HERE: Altered
+    ("CFG_MSGOUT_NMEA_ID_GSV_UART1", 0),  # HERE: Altered
+    ("CFG_MSGOUT_NMEA_ID_GSV_UART2", 0),  # HERE: Altered
+    ("CFG_MSGOUT_NMEA_ID_GSV_USB", 0),  # HERE: Altered
+    ("CFG_MSGOUT_NMEA_ID_RMC_I2C", 0),  # HERE: Altered
+    ("CFG_MSGOUT_NMEA_ID_RMC_SPI", 0),  # HERE: Altered
+    ("CFG_MSGOUT_NMEA_ID_RMC_UART1", 0),  # HERE: Altered
+    ("CFG_MSGOUT_NMEA_ID_RMC_UART2", 0),  # HERE: Altered
+    ("CFG_MSGOUT_NMEA_ID_RMC_USB", 0),  # HERE: Altered
+    ("CFG_MSGOUT_NMEA_ID_VLW_I2C", 0),
+    ("CFG_MSGOUT_NMEA_ID_VLW_SPI", 0),
+    ("CFG_MSGOUT_NMEA_ID_VLW_UART1", 0),
+    ("CFG_MSGOUT_NMEA_ID_VLW_UART2", 0),
+    ("CFG_MSGOUT_NMEA_ID_VLW_USB", 0),
+    ("CFG_MSGOUT_NMEA_ID_VTG_I2C", 0),  # HERE: Altered
+    ("CFG_MSGOUT_NMEA_ID_VTG_SPI", 0),  # HERE: Altered
+    ("CFG_MSGOUT_NMEA_ID_VTG_UART1", 0),  # HERE: Altered
+    ("CFG_MSGOUT_NMEA_ID_VTG_UART2", 0),  # HERE: Altered
+    ("CFG_MSGOUT_NMEA_ID_VTG_USB", 0),  # HERE: Altered
+    ("CFG_MSGOUT_NMEA_ID_ZDA_I2C", 0),
+    ("CFG_MSGOUT_NMEA_ID_ZDA_SPI", 0),
+    ("CFG_MSGOUT_NMEA_ID_ZDA_UART1", 0),
+    ("CFG_MSGOUT_NMEA_ID_ZDA_UART2", 0),
+    ("CFG_MSGOUT_NMEA_ID_ZDA_USB", 0),
+    ("CFG_MSGOUT_PUBX_ID_POLYP_I2C", 0),
+    ("CFG_MSGOUT_PUBX_ID_POLYP_SPI", 0),
+    ("CFG_MSGOUT_PUBX_ID_POLYP_UART1", 0),
+    ("CFG_MSGOUT_PUBX_ID_POLYP_UART2", 0),
+    ("CFG_MSGOUT_PUBX_ID_POLYP_USB", 0),
+    ("CFG_MSGOUT_PUBX_ID_POLYS_I2C", 0),
+    ("CFG_MSGOUT_PUBX_ID_POLYS_SPI", 0),
+    ("CFG_MSGOUT_PUBX_ID_POLYS_UART1", 0),
+    ("CFG_MSGOUT_PUBX_ID_POLYS_UART2", 0),
+    ("CFG_MSGOUT_PUBX_ID_POLYS_USB", 0),
+    ("CFG_MSGOUT_PUBX_ID_POLYT_I2C", 0),
+    ("CFG_MSGOUT_PUBX_ID_POLYT_SPI", 0),
+    ("CFG_MSGOUT_PUBX_ID_POLYT_UART1", 0),
+    ("CFG_MSGOUT_PUBX_ID_POLYT_UART2", 0),
+    ("CFG_MSGOUT_PUBX_ID_POLYT_USB", 0),
+    ("CFG_MSGOUT_RTCM_3X_TYPE1005_I2C", 0),
+    ("CFG_MSGOUT_RTCM_3X_TYPE1005_SPI", 0),
+    ("CFG_MSGOUT_RTCM_3X_TYPE1005_UART1", 0),
+    ("CFG_MSGOUT_RTCM_3X_TYPE1005_UART2", 0),
+    ("CFG_MSGOUT_RTCM_3X_TYPE1005_USB", 0),
+    ("CFG_MSGOUT_RTCM_3X_TYPE1077_I2C", 0),
+    ("CFG_MSGOUT_RTCM_3X_TYPE1077_SPI", 0),
+    ("CFG_MSGOUT_RTCM_3X_TYPE1077_UART1", 0),
+    ("CFG_MSGOUT_RTCM_3X_TYPE1077_UART2", 0),
+    ("CFG_MSGOUT_RTCM_3X_TYPE1077_USB", 0),
+    ("CFG_MSGOUT_RTCM_3X_TYPE1087_I2C", 0),
+    ("CFG_MSGOUT_RTCM_3X_TYPE1087_SPI", 0),
+    ("CFG_MSGOUT_RTCM_3X_TYPE1087_UART1", 0),
+    ("CFG_MSGOUT_RTCM_3X_TYPE1087_UART2", 0),
+    ("CFG_MSGOUT_RTCM_3X_TYPE1087_USB", 0),
+    ("CFG_MSGOUT_RTCM_3X_TYPE1097_I2C", 0),
+    ("CFG_MSGOUT_RTCM_3X_TYPE1097_SPI", 0),
+    ("CFG_MSGOUT_RTCM_3X_TYPE1097_UART1", 0),
+    ("CFG_MSGOUT_RTCM_3X_TYPE1097_UART2", 0),
+    ("CFG_MSGOUT_RTCM_3X_TYPE1097_USB", 0),
+    ("CFG_MSGOUT_RTCM_3X_TYPE1127_I2C", 0),
+    ("CFG_MSGOUT_RTCM_3X_TYPE1127_SPI", 0),
+    ("CFG_MSGOUT_RTCM_3X_TYPE1127_UART1", 0),
+    ("CFG_MSGOUT_RTCM_3X_TYPE1127_UART2", 0),
+    ("CFG_MSGOUT_RTCM_3X_TYPE1127_USB", 0),
+    ("CFG_MSGOUT_RTCM_3X_TYPE1230_I2C", 0),
+    ("CFG_MSGOUT_RTCM_3X_TYPE1230_SPI", 0),
+    ("CFG_MSGOUT_RTCM_3X_TYPE1230_UART1", 0),
+    ("CFG_MSGOUT_RTCM_3X_TYPE1230_UART2", 0),
+    ("CFG_MSGOUT_RTCM_3X_TYPE1230_USB", 0),
+    ("CFG_MSGOUT_RTCM_3X_TYPE4072_1_I2C", 0),
+    ("CFG_MSGOUT_RTCM_3X_TYPE4072_1_SPI", 0),
+    ("CFG_MSGOUT_RTCM_3X_TYPE4072_1_UART1", 0),
+    ("CFG_MSGOUT_RTCM_3X_TYPE4072_1_UART2", 0),
+    ("CFG_MSGOUT_RTCM_3X_TYPE4072_1_USB", 0),
+    ("CFG_MSGOUT_UBX_LOG_INFO_I2C", 0),
+    ("CFG_MSGOUT_UBX_LOG_INFO_SPI", 0),
+    ("CFG_MSGOUT_UBX_LOG_INFO_UART1", 0),
+    ("CFG_MSGOUT_UBX_LOG_INFO_UART2", 0),
+    ("CFG_MSGOUT_UBX_LOG_INFO_USB", 0),
+    ("CFG_MSGOUT_UBX_MON_COMMS_I2C", 1),
+    ("CFG_MSGOUT_UBX_MON_COMMS_SPI", 1),
+    ("CFG_MSGOUT_UBX_MON_COMMS_UART1", 1),
+    ("CFG_MSGOUT_UBX_MON_COMMS_UART2", 1),
+    ("CFG_MSGOUT_UBX_MON_COMMS_USB", 1),
+    ("CFG_MSGOUT_UBX_MON_HW2_I2C", 0),
+    ("CFG_MSGOUT_UBX_MON_HW2_SPI", 0),
+    ("CFG_MSGOUT_UBX_MON_HW2_UART1", 0),
+    ("CFG_MSGOUT_UBX_MON_HW2_UART2", 0),
+    ("CFG_MSGOUT_UBX_MON_HW2_USB", 0),
+    ("CFG_MSGOUT_UBX_MON_HW3_I2C", 0),
+    ("CFG_MSGOUT_UBX_MON_HW3_SPI", 0),
+    ("CFG_MSGOUT_UBX_MON_HW3_UART1", 0),
+    ("CFG_MSGOUT_UBX_MON_HW3_UART2", 0),
+    ("CFG_MSGOUT_UBX_MON_HW3_USB", 0),
+    ("CFG_MSGOUT_UBX_MON_HW_I2C", 0),
+    ("CFG_MSGOUT_UBX_MON_HW_SPI", 0),
+    ("CFG_MSGOUT_UBX_MON_HW_UART1", 0),
+    ("CFG_MSGOUT_UBX_MON_HW_UART2", 0),
+    ("CFG_MSGOUT_UBX_MON_HW_USB", 0),
+    ("CFG_MSGOUT_UBX_MON_IO_I2C", 0),
+    ("CFG_MSGOUT_UBX_MON_IO_SPI", 0),
+    ("CFG_MSGOUT_UBX_MON_IO_UART1", 0),
+    ("CFG_MSGOUT_UBX_MON_IO_UART2", 0),
+    ("CFG_MSGOUT_UBX_MON_IO_USB", 0),
+    ("CFG_MSGOUT_UBX_MON_MSGPP_I2C", 0),
+    ("CFG_MSGOUT_UBX_MON_MSGPP_SPI", 0),
+    ("CFG_MSGOUT_UBX_MON_MSGPP_UART1", 0),
+    ("CFG_MSGOUT_UBX_MON_MSGPP_UART2", 0),
+    ("CFG_MSGOUT_UBX_MON_MSGPP_USB", 0),
+    ("CFG_MSGOUT_UBX_MON_RF_I2C", 0),
+    ("CFG_MSGOUT_UBX_MON_RF_SPI", 0),
+    ("CFG_MSGOUT_UBX_MON_RF_UART1", 0),
+    ("CFG_MSGOUT_UBX_MON_RF_UART2", 0),
+    ("CFG_MSGOUT_UBX_MON_RF_USB", 0),
+    ("CFG_MSGOUT_UBX_MON_RXBUF_I2C", 0),
+    ("CFG_MSGOUT_UBX_MON_RXBUF_SPI", 0),
+    ("CFG_MSGOUT_UBX_MON_RXBUF_UART1", 0),
+    ("CFG_MSGOUT_UBX_MON_RXBUF_UART2", 0),
+    ("CFG_MSGOUT_UBX_MON_RXBUF_USB", 0),
+    ("CFG_MSGOUT_UBX_MON_RXR_I2C", 0),
+    ("CFG_MSGOUT_UBX_MON_RXR_SPI", 0),
+    ("CFG_MSGOUT_UBX_MON_RXR_UART1", 0),
+    ("CFG_MSGOUT_UBX_MON_RXR_UART2", 0),
+    ("CFG_MSGOUT_UBX_MON_RXR_USB", 0),
+    ("CFG_MSGOUT_UBX_MON_TXBUF_I2C", 0),
+    ("CFG_MSGOUT_UBX_MON_TXBUF_SPI", 0),
+    ("CFG_MSGOUT_UBX_MON_TXBUF_UART1", 0),
+    ("CFG_MSGOUT_UBX_MON_TXBUF_UART2", 0),
+    ("CFG_MSGOUT_UBX_MON_TXBUF_USB", 0),
+    ("CFG_MSGOUT_UBX_NAV_CLOCK_I2C", 0),
+    ("CFG_MSGOUT_UBX_NAV_CLOCK_SPI", 0),
+    ("CFG_MSGOUT_UBX_NAV_CLOCK_UART1", 0),
+    ("CFG_MSGOUT_UBX_NAV_CLOCK_UART2", 0),
+    ("CFG_MSGOUT_UBX_NAV_CLOCK_USB", 0),
+    ("CFG_MSGOUT_UBX_NAV_DOP_I2C", 0),
+    ("CFG_MSGOUT_UBX_NAV_DOP_SPI", 0),
+    ("CFG_MSGOUT_UBX_NAV_DOP_UART1", 0),
+    ("CFG_MSGOUT_UBX_NAV_DOP_UART2", 0),
+    ("CFG_MSGOUT_UBX_NAV_DOP_USB", 0),
+    ("CFG_MSGOUT_UBX_NAV_EOE_I2C", 0),
+    ("CFG_MSGOUT_UBX_NAV_EOE_SPI", 0),
+    ("CFG_MSGOUT_UBX_NAV_EOE_UART1", 0),
+    ("CFG_MSGOUT_UBX_NAV_EOE_UART2", 0),
+    ("CFG_MSGOUT_UBX_NAV_EOE_USB", 0),
+    ("CFG_MSGOUT_UBX_NAV_GEOFENCE_I2C", 0),
+    ("CFG_MSGOUT_UBX_NAV_GEOFENCE_SPI", 0),
+    ("CFG_MSGOUT_UBX_NAV_GEOFENCE_UART1", 0),
+    ("CFG_MSGOUT_UBX_NAV_GEOFENCE_UART2", 0),
+    ("CFG_MSGOUT_UBX_NAV_GEOFENCE_USB", 0),
+    ("CFG_MSGOUT_UBX_NAV_ODO_I2C", 0),
+    ("CFG_MSGOUT_UBX_NAV_ODO_SPI", 0),
+    ("CFG_MSGOUT_UBX_NAV_ODO_UART1", 0),
+    ("CFG_MSGOUT_UBX_NAV_ODO_UART2", 0),
+    ("CFG_MSGOUT_UBX_NAV_ODO_USB", 0),
+    ("CFG_MSGOUT_UBX_NAV_ORB_I2C", 0),
+    ("CFG_MSGOUT_UBX_NAV_ORB_SPI", 0),
+    ("CFG_MSGOUT_UBX_NAV_ORB_UART1", 0),
+    ("CFG_MSGOUT_UBX_NAV_ORB_UART2", 0),
+    ("CFG_MSGOUT_UBX_NAV_ORB_USB", 0),
+    ("CFG_MSGOUT_UBX_NAV_POSECEF_I2C", 0),
+    ("CFG_MSGOUT_UBX_NAV_POSECEF_SPI", 0),
+    ("CFG_MSGOUT_UBX_NAV_POSECEF_UART1", 0),
+    ("CFG_MSGOUT_UBX_NAV_POSECEF_UART2", 0),
+    ("CFG_MSGOUT_UBX_NAV_POSECEF_USB", 0),
+    ("CFG_MSGOUT_UBX_NAV_POSLLH_I2C", 0),
+    ("CFG_MSGOUT_UBX_NAV_POSLLH_SPI", 0),
+    ("CFG_MSGOUT_UBX_NAV_POSLLH_UART1", 0),
+    ("CFG_MSGOUT_UBX_NAV_POSLLH_UART2", 0),
+    ("CFG_MSGOUT_UBX_NAV_POSLLH_USB", 0),
+    ("CFG_MSGOUT_UBX_NAV_PVT_I2C", 0),
+    ("CFG_MSGOUT_UBX_NAV_PVT_SPI", 0),
+    ("CFG_MSGOUT_UBX_NAV_PVT_UART1", 0),
+    ("CFG_MSGOUT_UBX_NAV_PVT_UART2", 0),
+    ("CFG_MSGOUT_UBX_NAV_PVT_USB", 0),
+    ("CFG_MSGOUT_UBX_NAV_SAT_I2C", 0),
+    ("CFG_MSGOUT_UBX_NAV_SAT_SPI", 0),
+    ("CFG_MSGOUT_UBX_NAV_SAT_UART1", 0),
+    ("CFG_MSGOUT_UBX_NAV_SAT_UART2", 0),
+    ("CFG_MSGOUT_UBX_NAV_SAT_USB", 0),
+    ("CFG_MSGOUT_UBX_NAV_SBAS_I2C", 0),
+    ("CFG_MSGOUT_UBX_NAV_SBAS_SPI", 0),
+    ("CFG_MSGOUT_UBX_NAV_SBAS_UART1", 0),
+    ("CFG_MSGOUT_UBX_NAV_SBAS_UART2", 0),
+    ("CFG_MSGOUT_UBX_NAV_SBAS_USB", 0),
+    ("CFG_MSGOUT_UBX_NAV_SIG_I2C", 0),
+    ("CFG_MSGOUT_UBX_NAV_SIG_SPI", 0),
+    ("CFG_MSGOUT_UBX_NAV_SIG_UART1", 0),
+    ("CFG_MSGOUT_UBX_NAV_SIG_UART2", 0),
+    ("CFG_MSGOUT_UBX_NAV_SIG_USB", 0),
+    ("CFG_MSGOUT_UBX_NAV_STATUS_I2C", 0),
+    ("CFG_MSGOUT_UBX_NAV_STATUS_SPI", 0),
+    ("CFG_MSGOUT_UBX_NAV_STATUS_UART1", 0),
+    ("CFG_MSGOUT_UBX_NAV_STATUS_UART2", 0),
+    ("CFG_MSGOUT_UBX_NAV_STATUS_USB", 0),
+    # ("CFG_MSGOUT_UBX_NAV_SVIN_I2C", 0),  #NOTE: These do appear in the Interface Description, but aren't in the db??
+    # ("CFG_MSGOUT_UBX_NAV_SVIN_SPI", 0),  #NOTE: These do appear in the Interface Description, but aren't in the db??
+    # ("CFG_MSGOUT_UBX_NAV_SVIN_UART1", 0),  #NOTE: These do appear in the Interface Description, but aren't in the db??
+    # ("CFG_MSGOUT_UBX_NAV_SVIN_UART2", 0),  #NOTE: These do appear in the Interface Description, but aren't in the db??
+    # ("CFG_MSGOUT_UBX_NAV_SVIN_USB", 0),  #NOTE: These do appear in the Interface Description, but aren't in the db??
+    ("CFG_MSGOUT_UBX_NAV_TIMEBDS_I2C", 0),
+    ("CFG_MSGOUT_UBX_NAV_TIMEBDS_SPI", 0),
+    ("CFG_MSGOUT_UBX_NAV_TIMEBDS_UART1", 0),
+    ("CFG_MSGOUT_UBX_NAV_TIMEBDS_UART2", 0),
+    ("CFG_MSGOUT_UBX_NAV_TIMEBDS_USB", 0),
+    ("CFG_MSGOUT_UBX_NAV_TIMEGAL_I2C", 0),
+    ("CFG_MSGOUT_UBX_NAV_TIMEGAL_SPI", 0),
+    ("CFG_MSGOUT_UBX_NAV_TIMEGAL_UART1", 0),
+    ("CFG_MSGOUT_UBX_NAV_TIMEGAL_UART2", 0),
+    ("CFG_MSGOUT_UBX_NAV_TIMEGAL_USB", 0),
+    ("CFG_MSGOUT_UBX_NAV_TIMEGLO_I2C", 0),
+    ("CFG_MSGOUT_UBX_NAV_TIMEGLO_SPI", 0),
+    ("CFG_MSGOUT_UBX_NAV_TIMEGLO_UART1", 0),
+    ("CFG_MSGOUT_UBX_NAV_TIMEGLO_UART2", 0),
+    ("CFG_MSGOUT_UBX_NAV_TIMEGLO_USB", 0),
+    ("CFG_MSGOUT_UBX_NAV_TIMEGPS_I2C", 0),
+    ("CFG_MSGOUT_UBX_NAV_TIMEGPS_SPI", 0),
+    ("CFG_MSGOUT_UBX_NAV_TIMEGPS_UART1", 1),
+    ("CFG_MSGOUT_UBX_NAV_TIMEGPS_UART2", 0),
+    ("CFG_MSGOUT_UBX_NAV_TIMEGPS_USB", 0),
+    ("CFG_MSGOUT_UBX_NAV_TIMELS_I2C", 0),
+    ("CFG_MSGOUT_UBX_NAV_TIMELS_SPI", 0),
+    ("CFG_MSGOUT_UBX_NAV_TIMELS_UART1", 0),
+    ("CFG_MSGOUT_UBX_NAV_TIMELS_UART2", 0),
+    ("CFG_MSGOUT_UBX_NAV_TIMELS_USB", 0),
+    ("CFG_MSGOUT_UBX_NAV_TIMEUTC_I2C", 0),
+    ("CFG_MSGOUT_UBX_NAV_TIMEUTC_SPI", 0),
+    ("CFG_MSGOUT_UBX_NAV_TIMEUTC_UART1", 0),
+    ("CFG_MSGOUT_UBX_NAV_TIMEUTC_UART2", 0),
+    ("CFG_MSGOUT_UBX_NAV_TIMEUTC_USB", 0),
+    ("CFG_MSGOUT_UBX_NAV_VELECEF_I2C", 0),
+    ("CFG_MSGOUT_UBX_NAV_VELECEF_SPI", 0),
+    ("CFG_MSGOUT_UBX_NAV_VELECEF_UART1", 0),
+    ("CFG_MSGOUT_UBX_NAV_VELECEF_UART2", 0),
+    ("CFG_MSGOUT_UBX_NAV_VELECEF_USB", 0),
+    ("CFG_MSGOUT_UBX_NAV_VELNED_I2C", 0),
+    ("CFG_MSGOUT_UBX_NAV_VELNED_SPI", 0),
+    ("CFG_MSGOUT_UBX_NAV_VELNED_UART1", 0),
+    ("CFG_MSGOUT_UBX_NAV_VELNED_UART2", 0),
+    ("CFG_MSGOUT_UBX_NAV_VELNED_USB", 0),
+    ("CFG_MSGOUT_UBX_RXM_MEASX_I2C", 0),
+    ("CFG_MSGOUT_UBX_RXM_MEASX_SPI", 0),
+    ("CFG_MSGOUT_UBX_RXM_MEASX_UART1", 0),
+    ("CFG_MSGOUT_UBX_RXM_MEASX_UART2", 0),
+    ("CFG_MSGOUT_UBX_RXM_MEASX_USB", 0),
+    ("CFG_MSGOUT_UBX_RXM_RAWX_I2C", 0),
+    ("CFG_MSGOUT_UBX_RXM_RAWX_SPI", 0),
+    ("CFG_MSGOUT_UBX_RXM_RAWX_UART1", 0),
+    ("CFG_MSGOUT_UBX_RXM_RAWX_UART2", 0),
+    ("CFG_MSGOUT_UBX_RXM_RAWX_USB", 0),
+    ("CFG_MSGOUT_UBX_RXM_RLM_I2C", 0),
+    ("CFG_MSGOUT_UBX_RXM_RLM_SPI", 0),
+    ("CFG_MSGOUT_UBX_RXM_RLM_UART1", 0),
+    ("CFG_MSGOUT_UBX_RXM_RLM_UART2", 0),
+    ("CFG_MSGOUT_UBX_RXM_RLM_USB", 0),
+    ("CFG_MSGOUT_UBX_RXM_RTCM_I2C", 0),
+    ("CFG_MSGOUT_UBX_RXM_RTCM_SPI", 0),
+    ("CFG_MSGOUT_UBX_RXM_RTCM_UART1", 0),
+    ("CFG_MSGOUT_UBX_RXM_RTCM_UART2", 0),
+    ("CFG_MSGOUT_UBX_RXM_RTCM_USB", 0),
+    ("CFG_MSGOUT_UBX_RXM_SFRBX_I2C", 0),
+    ("CFG_MSGOUT_UBX_RXM_SFRBX_SPI", 0),
+    ("CFG_MSGOUT_UBX_RXM_SFRBX_UART1", 0),
+    ("CFG_MSGOUT_UBX_RXM_SFRBX_UART2", 0),
+    ("CFG_MSGOUT_UBX_RXM_SFRBX_USB", 0),
+    # ("CFG_MSGOUT_UBX_TIM_SVIN_I2C", 0)  #NOTE: These do appear in the Interface Description, but aren't in the db??
+    # ("CFG_MSGOUT_UBX_TIM_SVIN_SPI", 0)  #NOTE: These do appear in the Interface Description, but aren't in the db??
+    # ("CFG_MSGOUT_UBX_TIM_SVIN_UART1", 0)  #NOTE: These do appear in the Interface Description, but aren't in the db??
+    # ("CFG_MSGOUT_UBX_TIM_SVIN_UART2", 0)  #NOTE: These do appear in the Interface Description, but aren't in the db??
+    # ("CFG_MSGOUT_UBX_TIM_SVIN_USB", 0)  #NOTE: These do appear in the Interface Description, but aren't in the db??
+    ("CFG_MSGOUT_UBX_TIM_TM2_I2C", 0),
+    ("CFG_MSGOUT_UBX_TIM_TM2_SPI", 0),
+    ("CFG_MSGOUT_UBX_TIM_TM2_UART1", 0),
+    ("CFG_MSGOUT_UBX_TIM_TM2_UART2", 0),
+    ("CFG_MSGOUT_UBX_TIM_TM2_USB", 0),
+    ("CFG_MSGOUT_UBX_TIM_TP_I2C", 0),
+    ("CFG_MSGOUT_UBX_TIM_TP_SPI", 0),
+    ("CFG_MSGOUT_UBX_TIM_TP_UART1", 0),
+    ("CFG_MSGOUT_UBX_TIM_TP_UART2", 0),
+    ("CFG_MSGOUT_UBX_TIM_TP_USB", 0),
+    ("CFG_MSGOUT_UBX_TIM_VRFY_I2C", 0),
+    ("CFG_MSGOUT_UBX_TIM_VRFY_SPI", 0),
+    ("CFG_MSGOUT_UBX_TIM_VRFY_UART1", 0),
+    ("CFG_MSGOUT_UBX_TIM_VRFY_UART2", 0),
+    ("CFG_MSGOUT_UBX_TIM_VRFY_USB", 0)
+]
+
+navspg = [
+    ("CFG_NAVSPG_FIXMODE", 3),
+    ("CFG_NAVSPG_INIFIX3D", 0),
+    ("CFG_NAVSPG_WKNROLLOVER", 2014),
+    ("CFG_NAVSPG_USE_PPP", 1),
+    ("CFG_NAVSPG_UTCSTANDARD", 0),
+    ("CFG_NAVSPG_DYNMODEL", 2),
+    ("CFG_NAVSPG_ACKAIDING", 0),
+    ("CFG_NAVSPG_USE_USRDAT", 0),
+    ("CFG_NAVSPG_USRDAT_MAJA", 6378137),
+    ("CFG_NAVSPG_USRDAT_FLAT", 298.25722356300002502),
+    ("CFG_NAVSPG_USRDAT_DX", 0),
+    ("CFG_NAVSPG_USRDAT_DY", 0),
+    ("CFG_NAVSPG_USRDAT_DZ", 0),
+    ("CFG_NAVSPG_USRDAT_ROTX", 0),
+    ("CFG_NAVSPG_USRDAT_ROTY", 0),
+    ("CFG_NAVSPG_USRDAT_ROTZ", 0),
+    ("CFG_NAVSPG_USRDAT_SCALE", 0),
+    ("CFG_NAVSPG_INFIL_MINSVS", 1),
+    ("CFG_NAVSPG_INFIL_MAXSVS", 1),
+    ("CFG_NAVSPG_INFIL_MINCNO", 9),
+    ("CFG_NAVSPG_INFIL_MINELEV", 5),
+    ("CFG_NAVSPG_INFIL_NCNOTHRS", 0),
+    ("CFG_NAVSPG_INFIL_CNOTHRS", 0),
+    ("CFG_NAVSPG_OUTFIL_PDOP", 250),
+    ("CFG_NAVSPG_OUTFIL_TDOP", 250),
+    ("CFG_NAVSPG_OUTFIL_PACC", 100),
+    ("CFG_NAVSPG_OUTFIL_TACC", 350),
+    ("CFG_NAVSPG_OUTFIL_FACC", 150),
+    ("CFG_NAVSPG_CONSTR_ALT", 0),
+    ("CFG_NAVSPG_CONSTR_ALTVAR", 10000),
+    ("CFG_NAVSPG_CONSTR_DGNSSTO", 60)
+]
+
+nmea = [
+    ("CFG_NMEA_PROTVER", 41),
+    ("CFG_NMEA_MAXSVS", 0),
+    ("CFG_NMEA_COMPAT", 0),
+    ("CFG_NMEA_CONSIDER", 1),
+    ("CFG_NMEA_LIMIT82", 0),
+    ("CFG_NMEA_HIGHPREC", 0),
+    ("CFG_NMEA_SVNUMBERING", 0),
+    ("CFG_NMEA_FILT_GPS", 0),
+    ("CFG_NMEA_FILT_SBAS", 0),
+    ("CFG_NMEA_FILT_QZSS", 0),
+    ("CFG_NMEA_FILT_GLO", 0),
+    ("CFG_NMEA_FILT_BDS", 0),
+    ("CFG_NMEA_OUT_INVFIX", 0),
+    ("CFG_NMEA_OUT_MSKFIX", 0),
+    ("CFG_NMEA_OUT_INVTIME", 0),
+    ("CFG_NMEA_OUT_INVDATE", 0),
+    ("CFG_NMEA_OUT_ONLYGPS", 0),
+    ("CFG_NMEA_OUT_FROZENCOG", 0),
+    ("CFG_NMEA_MAINTALKERID", 0),
+    ("CFG_NMEA_GSVTALKERID", 0),
+    ("CFG_NMEA_BDSTALKERID", 0)
+]
+
+odo = [
+    ("CFG_ODO_USE_ODO", 0),
+    ("CFG_ODO_USE_COG", 0),
+    ("CFG_ODO_OUTLPVEL", 0),
+    ("CFG_ODO_OUTLPCOG", 0),
+    ("CFG_ODO_PROFILE", 0),
+    ("CFG_ODO_COGMAXSPEED", 10),
+    ("CFG_ODO_COGMAXPOSACC", 50),
+    ("CFG_ODO_VELLPGAIN", 153),
+    ("CFG_ODO_COGLPGAIN", 76)
+]
+
+rate = [
+
+    ("CFG_RATE_MEAS", 1000),
+    ("CFG_RATE_NAV", 1),
+    ("CFG_RATE_TIMEREF", 1)
+]
+
+rinv = [
+    ("CFG_RINV_DUMP", 0),
+    ("CFG_RINV_BINARY", 0),
+    ("CFG_RINV_DATA_SIZE", 22),
+    ("CFG_RINV_CHUNK0", bytes.fromhex('203a656369746f4e')),
+    ("CFG_RINV_CHUNK1", bytes.fromhex('2061746164206f6e')),
+    ("CFG_RINV_CHUNK2", bytes.fromhex('0000216465766173')),
+    ("CFG_RINV_CHUNK3", bytes.fromhex('0000000000000000'))
+]
+
+sbas = [
+    ("CFG_SBAS_USE_TESTMODE", 0),
+    ("CFG_SBAS_USE_RANGING", 1),
+    ("CFG_SBAS_USE_DIFFCORR", 1),
+    ("CFG_SBAS_USE_INTEGRITY", 0),
+    ("CFG_SBAS_PRNSCANMASK", bytes.fromhex('000000000007a389'))
+]
+
+signal = [
+    ("CFG_SIGNAL_GPS_ENA",          1),
+    ("CFG_SIGNAL_GPS_L1CA_ENA",     1),
+    ("CFG_SIGNAL_GPS_L2C_ENA",      1),
+    ("CFG_SIGNAL_SBAS_ENA",         1),
+    ("CFG_SIGNAL_SBAS_L1CA_ENA",    0),
+    ("CFG_SIGNAL_GAL_ENA",          1),
+    ("CFG_SIGNAL_GAL_E1_ENA",       1),
+    ("CFG_SIGNAL_GAL_E5B_ENA",      1),
+    ("CFG_SIGNAL_BDS_ENA",          1),
+    ("CFG_SIGNAL_BDS_B1_ENA",       1),
+    ("CFG_SIGNAL_BDS_B2_ENA",       1),
+    ("CFG_SIGNAL_QZSS_ENA",         1),
+    ("CFG_SIGNAL_QZSS_L1CA_ENA",    1),
+    # ("CFG_SIGNAL_QZSS_L1S_ENA",     0),  #NOTE: These do appear in the Interface Description, but aren't in the db??
+    ("CFG_SIGNAL_QZSS_L2C_ENA",     1),
+    ("CFG_SIGNAL_GLO_ENA",          1),
+    ("CFG_SIGNAL_GLO_L1_ENA",       1),
+    ("CFG_SIGNAL_GLO_L2_ENA",       1)
+]
+
+spi = [
+    ("CFG_SPI_MAXFF", 50),
+    ("CFG_SPI_CPOLARITY", 0),
+    ("CFG_SPI_CPHASE", 0),
+    ("CFG_SPI_EXTENDEDTIMEOUT", 0),
+    ("CFG_SPI_ENABLED", 0),
+
+    ("CFG_SPIINPROT_UBX", 1),
+    ("CFG_SPIINPROT_NMEA", 1),
+    ("CFG_SPIINPROT_RTCM3X", 1),
+
+    ("CFG_SPIOUTPROT_UBX", 1),
+    ("CFG_SPIOUTPROT_NMEA", 1),
+    ("CFG_SPIOUTPROT_RTCM3X", 1)
+]
+
+tmode = [
+    ("CFG_TMODE_MODE", 0),
+    ("CFG_TMODE_POS_TYPE", 0),
+    ("CFG_TMODE_ECEF_X", 0),
+    ("CFG_TMODE_ECEF_Y", 0),
+    ("CFG_TMODE_ECEF_Z", 0),
+    ("CFG_TMODE_ECEF_X_HP", 0),
+    ("CFG_TMODE_ECEF_Y_HP", 0),
+    ("CFG_TMODE_ECEF_Z_HP", 0),
+    ("CFG_TMODE_LAT", 0),
+    ("CFG_TMODE_LON", 0),
+    ("CFG_TMODE_HEIGHT", 0),
+    ("CFG_TMODE_LAT_HP", 0),
+    ("CFG_TMODE_LON_HP", 0),
+    ("CFG_TMODE_HEIGHT_HP", 0),
+    ("CFG_TMODE_FIXED_POS_ACC", 0),
+    ("CFG_TMODE_SVIN_MIN_DUR", 0),
+    ("CFG_TMODE_SVIN_ACC_LIMIT", 0)
+]
+
+tp = [
+    ("CFG_TP_PULSE_DEF",            0),  # 0=period (us) // 1=freq (Hz)
+    ("CFG_TP_PULSE_LENGTH_DEF",     1),  # 0=ratio (%) // 1=length (us)
+    ("CFG_TP_ANT_CABLEDELAY",       50),  # (us)
+    ("CFG_TP_PERIOD_TP1",           1000000),  # (us)
+    ("CFG_TP_PERIOD_LOCK_TP1",      1000000),  # (us)
+    ("CFG_TP_FREQ_TP1",             1),  # (%)
+    ("CFG_TP_FREQ_LOCK_TP1",        1),  # (%)
+    ("CFG_TP_LEN_TP1",              100000),  # (us)
+    ("CFG_TP_LEN_LOCK_TP1",         200000),  # (us)
+    ("CFG_TP_DUTY_TP1",             10),  # (%)
+    ("CFG_TP_DUTY_LOCK_TP1",        10),  # (%)
+    ("CFG_TP_USER_DELAY_TP1",       0),  # (us)
+    ("CFG_TP_TP1_ENA",              1),  # 0=off // 1=on
+    ("CFG_TP_SYNC_GNSS_TP1",        1),  # 0=off // 1=on
+    ("CFG_TP_USE_LOCKED_TP1",       1),  # 0=off // 1=on
+    ("CFG_TP_ALIGN_TO_TOW_TP1",     1),  # 0=off // 1=on
+    ("CFG_TP_POL_TP1",              1),  # 0=off // 1=on
+    ("CFG_TP_TIMEGRID_TP1",         1),
+
+    ("CFG_TP_PERIOD_TP2",           1000000),
+    ("CFG_TP_PERIOD_LOCK_TP2",      1000000),
+    ("CFG_TP_FREQ_TP2",             1),
+    ("CFG_TP_FREQ_LOCK_TP2",        1),
+    ("CFG_TP_LEN_TP2",              0),
+    ("CFG_TP_LEN_LOCK_TP2",         100000),
+    ("CFG_TP_DUTY_TP2",             0),
+    ("CFG_TP_DUTY_LOCK_TP2",        10),
+    ("CFG_TP_USER_DELAY_TP2",       0),
+    ("CFG_TP_TP2_ENA",              0),
+    ("CFG_TP_SYNC_GNSS_TP2",        1),
+    ("CFG_TP_USE_LOCKED_TP2",       1),
+    ("CFG_TP_ALIGN_TO_TOW_TP2",     1),
+    ("CFG_TP_POL_TP2",              1),
+    ("CFG_TP_TIMEGRID_TP2",         1)
+]
+
+uart1 = [
+    ("CFG_UART1_BAUDRATE", 115200),
+    ("CFG_UART1_STOPBITS", 1),
+    ("CFG_UART1_DATABITS", 8),
+    ("CFG_UART1_PARITY", 0),
+    ("CFG_UART1_ENABLED", 1),
+
+    ("CFG_UART1INPROT_UBX", 1),
+    ("CFG_UART1INPROT_NMEA", 0),
+    ("CFG_UART1INPROT_RTCM3X", 0),
+
+    ("CFG_UART1OUTPROT_UBX", 1),
+    ("CFG_UART1OUTPROT_NMEA", 0),
+    ("CFG_UART1OUTPROT_RTCM3X", 0)
+]
+
+uart2 = [
+    ("CFG_UART2_BAUDRATE", 38400),
+    ("CFG_UART2_STOPBITS", 1),
+    ("CFG_UART2_DATABITS", 0),
+    ("CFG_UART2_PARITY", 0),
+    ("CFG_UART2_ENABLED", 1),
+    ("CFG_UART2_REMAP", 0),
+
+    ("CFG_UART2INPROT_UBX", 0),
+    ("CFG_UART2INPROT_NMEA", 0),
+    ("CFG_UART2INPROT_RTCM3X", 1),
+
+    ("CFG_UART2OUTPROT_UBX", 0),
+    ("CFG_UART2OUTPROT_NMEA", 0),
+    ("CFG_UART2OUTPROT_RTCM3X", 1)
+]
+
+usb = [
+    ("CFG_USB_ENABLED", 1),
+    ("CFG_USB_SELFPOW", 1),
+    ("CFG_USB_VENDOR_ID", 5446),
+    ("CFG_USB_PRODUCT_ID", 425),
+    ("CFG_USB_POWER", 0),
+    ("CFG_USB_VENDOR_STR0", bytes.fromhex('4120786f6c622d75')),
+    ("CFG_USB_VENDOR_STR1", bytes.fromhex('2e777777202d2047')),
+    ("CFG_USB_VENDOR_STR2", bytes.fromhex('632e786f6c622d75')),
+    ("CFG_USB_VENDOR_STR3", bytes.fromhex('0000000000006d6f')),
+    ("CFG_USB_PRODUCT_STR0", bytes.fromhex('4720786f6c622d75')),
+    ("CFG_USB_PRODUCT_STR1", bytes.fromhex('656365722053534e')),
+    ("CFG_USB_PRODUCT_STR2", bytes.fromhex('0000000072657669')),
+    ("CFG_USB_PRODUCT_STR3", bytes.fromhex('0000000000000000')),
+    ("CFG_USB_SERIAL_NO_STR0", bytes.fromhex('0000000000000000')),
+    ("CFG_USB_SERIAL_NO_STR1", bytes.fromhex('0000000000000000')),
+    ("CFG_USB_SERIAL_NO_STR2", bytes.fromhex('0000000000000000')),
+    ("CFG_USB_SERIAL_NO_STR3", bytes.fromhex('0000000000000000')),
+
+    ("CFG_USBINPROT_UBX", 1),
+    ("CFG_USBINPROT_NMEA", 1),
+    ("CFG_USBINPROT_RTCM3X", 1),
+
+    ("CFG_USBOUTPROT_UBX", 1),
+    ("CFG_USBOUTPROT_NMEA", 1),
+    ("CFG_USBOUTPROT_RTCM3X", 1)
+]
+all_msgs = list(geofence + hw + i2c + infmsg + itfm + logfilter +
+                mot + msgout + navspg + nmea + odo + rate +
+                rinv + sbas + signal + spi + tmode + tp +
+                uart1 + uart2 + usb)
+
+
+def set_UBX(serStream, cfgData=None):
+    """
+    Just a modified example from their README, need to actually decide exactly what needs to be configed and how,
+    then can start trying to properly set options.
+
+    """
+    layers = 2 #Flash
+    transaction = 0 #None
+
+    if not cfgData:
+        cfgData = [("CFG_UART1_BAUDRATE", 115200), ('CFG_TP_ANT_CABLEDELAY', 0)]
+
+    msg = UBXMessage.config_set(layers, transaction, cfgData)
+    serStream = create_serStream()
+    serStream.write(msg.serialize())
+
+def get_UBX(serStream):
+    """
+    Just a modified example from their README, need to actually decide exactly what needs to be configed and how,
+    then can start trying to properly set options.
+
+    """
+    layers = 7 #def
+    transaction = 0 #None
+    cfgData = ["CFG_UART1_BAUDRATE"]#, 'CFG_TP_ANT_CABLEDELAY']
+    msg = UBXMessage.config_poll(layers, transaction, cfgData)
+    serStream = create_serStream()
+    serStream.write(msg.serialize())
+
+
+def example_serial():
+    port = '/dev/ttyS0'
+
+    with serial.Serial(port, baudrate=115200, parity=PARITY_NONE, bytesize=EIGHTBITS, stopbits=STOPBITS_ONE) as ser:
+        print(ser.name)
+        ser.write(b'hello')
+        ser.close()
+    return(1)
+
+def create_serStream(port='/dev/ttyUSB0'):
+
+    return(serial.Serial(port, baudrate=115200, parity=PARITY_NONE, bytesize=EIGHTBITS, stopbits=STOPBITS_ONE))
+
+if __name__ == "__main__" :
+    print("nah")
