@@ -19,8 +19,9 @@ from serial import Serial, SerialException, SerialTimeoutException
 
 import pyubx2.exceptions as ube
 import math
+import logging
 
-from serial_config import all_msgs
+from serial_config import all_msgs, ack_msg
 
 
 class UBXStreamer:
@@ -51,6 +52,8 @@ class UBXStreamer:
         self._e = threading.Event()
         self._parsing_e = threading.Event()
         self._parsing_e.set()
+
+        logging.basicConfig(level=logging.DEBUG, format="%(asctime)s : %(levelname)s : %(message)s")
 
     def __del__(self):
         """
@@ -191,15 +194,14 @@ class UBXStreamer:
 
         # Only expect and ACK back if it's a CFG POLL
         if msg.msg_cls == b'\x06':  # That is, if it's a CFG message
-            print("This is a 'CFG' class message, expecting a ACK and CFG response")
+            logging.info("This is a 'CFG' class message, expecting a ACK and CFG response")  # LOG
             self._waiting_ack = True
         self._waiting_parse = True
         self.send(msg.serialize())
 
         thing = [msg]
-        me = 0
         if self._waiting_ack:
-            thing.append(me)  # want this to be a ACK ACK msg
+            thing.append(ack_msg)  # want this to be a ACK ACK msg
             # thing.append(UBXMessage('b\x05', b'\x01', 0))
 
 
@@ -212,11 +214,11 @@ class UBXStreamer:
             resp = self._parsed_data
             print(f"{resp}")
             if resp.msg_cls == b'\x05':
-                print(f"{resp.identity} received, clearing self._waiting_ack")
-                print(f"{resp}")
+                logging.info(f"{resp.identity} received, clearing self._waiting_ack")  # LOG
+                logging.info(f"{resp}")
                 self._parsing_e.set()
                 self._waiting_ack = False
-                thing.remove(me)
+                thing.remove(ack_msg)
             elif resp.identity == msg.identity:
                 print("hi")
                 self._parsing_e.set()
