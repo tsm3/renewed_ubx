@@ -4,7 +4,8 @@
   - This could maybe make things cleaner? although I'd be less used to them so it'd make implementation more 
     difficult and I probably wouldn't use them right
 - The _single_send_poll() method worked, but I'm not convinced it's _correct_ still
-- 
+- msg.identity -> CFG-VAL{GET, SET, DEL}
+- msg.payload returns bytes
 
 ## Feature List:
 - Stuff

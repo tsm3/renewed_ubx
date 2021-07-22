@@ -17,6 +17,9 @@ def eq():
 def create_serStream(port='/dev/ttyUSB0', timeout=0):
     return(serial.Serial(port, baudrate=115200, parity=PARITY_NONE, bytesize=EIGHTBITS, stopbits=STOPBITS_ONE, timeout=timeout))
 
+def test_identity():
+    msg1 = yuh
+
 def main(op="read"):
     port = "/dev/ttyUSB0"
     layers = 1  # RAM

@@ -23,6 +23,8 @@ import logging
 
 from serial_config import all_msgs, ack_msg
 
+import pickle
+
 
 class UBXStreamer:
     """
@@ -53,13 +55,20 @@ class UBXStreamer:
         self._parsing_e = threading.Event()
         self._parsing_e.set()
 
-        logging.basicConfig(level=logging.DEBUG, format="%(asctime)s : %(levelname)s : %(message)s")
+        logging.basicConfig(level=logging.DEBUG, format="%(asctime)s : %(levelname)s : %(message)s : ")
 
     def __del__(self):
         """
         Destructor.
         """
 
+        self.stop_read_thread()
+        self.disconnect()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
         self.stop_read_thread()
         self.disconnect()
 
@@ -142,22 +151,25 @@ class UBXStreamer:
 
         while self._reading and self._serial_object and self._live:  # HERE: Check if _live does same as _reading
             if self._serial_object.in_waiting:
-                self._parsing_e.wait(timeout=None)  # If some data needs to get parsed, use this to do it
+                print("1")
+                self._parsing_e.wait(timeout=None)  # If some data needs to get parsed, use this to do it, so it doesn't get overwritten
+                print("2")
                 try:
                     (raw_data, parsed_data) = self._ubxreader.read()
-                    #                     if raw_data:
-                    #                         print(raw_data)
+                    print(f"{raw_data} ===== {parsed_data}")
+                    print("3")
                     if parsed_data:
+                        print("4")
                         self._parsed_data = parsed_data
+                        # I feel like these blocks should be contained in a function somewhere
                         if parsed_data.msg_cls == b'\x05':  # That is, class == ACK
                             if UBXStreamer.is_ack(parsed_data):
                                 self._waiting_ack = False
                                 print("Acknowledged")
                         else:
                             print("Not an ack:", end="\n\t\t\t")
-                            # print(parsed_data, end="\n\t\t\t")
                             print(parsed_data, end="\n\t\t\t")
-                            print(parsed_data.payload)
+                            logging.info(f"Parsed Payload : {parsed_data.payload}")
                         if self._waiting_parse:
                             self._parsing_e.clear()
                         self._e.set()  # Everytime there exists parsed data, after it prints, sets _e flag -> wake up main thread
@@ -198,50 +210,48 @@ class UBXStreamer:
             self._waiting_ack = True
         self._waiting_parse = True
         self.send(msg.serialize())
-
-        thing = [msg]
-        if self._waiting_ack:
-            thing.append(ack_msg)  # want this to be a ACK ACK msg
-            # thing.append(UBXMessage('b\x05', b'\x01', 0))
-
-
-
-
-        while thing:
+        print("shit sent")
+        while self._waiting_ack or self._waiting_parse:
+            print(f"waiting_ack {self._waiting_ack} ===== waiting_parse {self._waiting_parse}")
             # HERE: make sure you wait long enough to get the first response from this, else you'll 'NONE' out
             self._e.wait(timeout=None)  # the _parsing_e flag will clear in read_thread since _waiting_parse
             self._e.clear()
             resp = self._parsed_data
             print(f"{resp}")
-            if resp.msg_cls == b'\x05':
+            if resp.msg_cls == b'\x05':  # If we got the ACK
                 logging.info(f"{resp.identity} received, clearing self._waiting_ack")  # LOG
-                logging.info(f"{resp}")
+                # logging.info(f"{resp}")
                 self._parsing_e.set()
                 self._waiting_ack = False
-                thing.remove(ack_msg)
-            elif resp.identity == msg.identity:
-                print("hi")
+            elif resp.identity == msg.identity:  # If we got sum else
+                # print("\n==============================\n Gunna run some tests\n==============================")
+                # print(f"msg.identity: {msg.identity}")
+                # print(f"resp.identity: {resp.identity}")
+                # print(f"msg.msg_cls: {msg.msg_cls} \t msg.msg_id: {msg.msg_id}")
+                # print(f"resp.msg_cls: {resp.msg_cls} \t resp.msg_id: {resp.msg_id}")
+                # print(f"msg.msgmode {msg.msgmode}")
+                # print(f"resp.msgmode {resp.msgmode}")
+                # print("\n==============================\n DONE\n==============================")
                 self._parsing_e.set()
                 self._waiting_parse = False
-                thing.remove(msg)
+
+                with open("thangy.pk1", 'wb') as file:
+                    pickle.dump(self._parsed_data, file, pickle.HIGHEST_PROTOCOL)
+
+                if UBXStreamer.is_resp(msg, resp):
+                    logging.info("Yuh we got the response to the poll :) \n\t\t" + str(resp))
             else:
-                print(f"in while thing loop: thing {thing}, resp {resp}")
-
-
-
+                logging.critical(f"Bruh wtf is this -> {resp}")
 
         # while self._waiting_ack:# or msg.identity != self._parsed_data.identity:  # Wait for acknowledgement
         #     self._e.clear()  # if we wake up and want to wait() again, we have to clear (if we wake up and it's not an ACK)
         #     self._e.wait(timeout=None)
         self._e.clear()  # Clear here from waking up for the ACK
-        print("two two")
-        print(f"\t\t{self._parsed_data}")
+        # print("two two")
+        # print(f"====\t{resp}\t====")
         # After ACK, have to make sure the response is the right type
-        print("three")
+        # print("three")
         #  So now we've gotten an ACK and a "GET" msg, check if it's the right one
-        response = self._parsed_data
-        if msg.msg_cls == response.msg_cls and msg.msg_id == response.msg_id:
-            print("Yuh we got the response to the poll :) \n\t\t", str(response))
 
 
     def send_pollmsg(self, msg: 'UBXMessage'):  # Not sure if I want to have them pass in a UBXMessage or have them pass in things to POLL
@@ -287,16 +297,35 @@ class UBXStreamer:
     def is_ack(parsed_data: 'UBXMessage') -> bool:
         """
         Used in read thread, to check identity of data in.
-        If the passed message is not 'ACK-ACK', raise Exception
+        - If ACK-NAK -> Exception
+        - If ACK-ACK -> True
+        - Else       -> False
         :param parsed_data: a message returned from _ubxreader.read()
         :type parsed_data: UBXMessage
         :rtype: bool
         """
-        if parsed_data.identity == 'ACK-ACK':
-            return True
+        if parsed_data.msg_cls == b'\x05':
+            if parsed_data.msg_id == b'\x01':  # Is ACK-ACK
+                return True
+            elif parsed_data.msg_id == b'\x00':  # Is ACK-NAK
+                raise Exception("NAK encountered")
         else:
-            # signal.raise_signal(signal.SIGINT)
-            raise Exception("NAK encountered")
+            logging.info("A non-ACK class msg encountered in .is_ack()")
+            return False
+
+    @staticmethod
+    def is_resp(msg: 'UBXMessage', resp: 'UBXMessage') -> bool:
+        """
+        Used to check if resp is a response to a sent msg.
+        Checks:
+            - msg.msg_cls == resp.msg_cls
+            - msg.msg_id == resp.msg_id
+            - resp.msgmode == 0 (VALGET)
+        :param msg: UBXMessage sent to device
+        :param resp: UBXMessage (presumably) returned from device
+        """
+
+        return (msg.msg_cls == resp.msg_cls) and (msg.msg_id == resp.msg_id) and (resp.msgmode == 0)
 
     @staticmethod
     def signal_handler(ubp, signal, frame):
