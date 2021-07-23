@@ -160,13 +160,13 @@ class UBXStreamer:
                     print("3")
                     if parsed_data:
                         print("4")
-                        self._parsed_data = parsed_data
                         # I feel like these blocks should be contained in a function somewhere
                         if parsed_data.msg_cls == b'\x05':  # That is, class == ACK
                             if UBXStreamer.is_ack(parsed_data):
                                 self._waiting_ack = False
                                 print("Acknowledged")
                         else:
+                            self._parsed_data = parsed_data  # Don't pass parsed data to attr if it's ACK -> not useful
                             print("Not an ack:", end="\n\t\t\t")
                             print(parsed_data, end="\n\t\t\t")
                             logging.info(f"Parsed Payload : {parsed_data.payload}")
@@ -320,12 +320,40 @@ class UBXStreamer:
         Checks:
             - msg.msg_cls == resp.msg_cls
             - msg.msg_id == resp.msg_id
-            - resp.msgmode == 0 (VALGET)
+            - resp.msgmode == 0 (GET)
+            - msg.msgmode == 2 (POLL)
+            - msg.length == 0 (empty payload)
         :param msg: UBXMessage sent to device
         :param resp: UBXMessage (presumably) returned from device
         """
 
-        return (msg.msg_cls == resp.msg_cls) and (msg.msg_id == resp.msg_id) and (resp.msgmode == 0)
+        return ((msg.msg_cls == resp.msg_cls) and (msg.msg_id == resp.msg_id) and (resp.msgmode == 0)
+                and (msg.msgmode == 0) and (msg.length == 0))
+
+    @staticmethod
+    def parse_tp_time(msg: 'UBXMessage') -> object:
+        """
+        Used to return time in ** format from a UBX-TIM-TP msg.
+        :param msg: UBXMessage returned from a UBX-TIM-TP POLL (msgmode=0)
+        :return: Time?
+        """
+        if msg.identity != "TIM-TP":
+            raise ValueError(f"Invalid msg passed to parse_tp_time msg.identity={msg.identity}")
+        if msg.msgmode != 0:
+            raise ValueError(f"Invalid msg passed to parse_tp_time msg.msgmode={msg.msgmode}")
+        if not msg.length > 0:
+            raise ValueError(f"Invalid msg passed to parse_tp_time msg.length={msg.length}")
+
+        logging.info(f"Next time pulse at {msg.towMS}ms + {msg.towSubMS>>32}ms +- {msg.qErr}ps")
+
+        # HERE: Currently a place holder, can use pandas df or some other form to store actual data from this, connecting pieces later
+
+        return
+
+    @staticmethod
+    def form_poll(msg_name) -> 'UBXMessage':
+        if isinstance(msg_name, str):
+            
 
     @staticmethod
     def signal_handler(ubp, signal, frame):

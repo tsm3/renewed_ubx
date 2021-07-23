@@ -23,3 +23,4 @@
 - [ ] Finish single POLL message method
 - [ ] Write user method for sending multiple POLL messages
 - [ ] Write static func to create msgs that aren't supported by pyubx2
+- [ ] Write static func to parse tp_data msgs specifically

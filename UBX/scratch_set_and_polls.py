@@ -16,6 +16,7 @@ def main(port="/dev/ttyUSB0", baud=115200, timeout=0.1, ubxonly=False):
         set_long_len = UBXMessage.config_set(layers=1, transaction=0, cfgData=[("CFG_TP_DUTY_TP1", 50)])
         # poll_tp_type = UBXMessage.config_poll(layer=1, position=0, keys=["CFG_TP_PULSE_DEF"])
         poll_tp_data = UBXMessage(b'\x0d', b'\x01', POLL)
+        print(poll_tp_data.identity)
         poll_tp_type = UBXMessage(b'\x0d', b'\x01', 2)
         poll_navpvt = UBXMessage(b'\x01', b'\x07', POLL)
 
@@ -34,6 +35,7 @@ def main(port="/dev/ttyUSB0", baud=115200, timeout=0.1, ubxonly=False):
                 logging.info("sleep 2")
                 sleep(2)
                 ubp._single_send_pollmsg(poll_tp_type)
+                UBXStreamer.parse_tp_time(ubp._parsed_data)
                 logging.info("sleep 3")
                 sleep(1)
                 ubp.send_setmsg(set_long_len)
