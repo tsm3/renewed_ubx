@@ -353,7 +353,16 @@ class UBXStreamer:
     @staticmethod
     def form_poll(msg_name) -> 'UBXMessage':
         if isinstance(msg_name, str):
-            
+            msg_name: str
+            msg_name.replace('-', '_')
+        elif isinstance(msg_name, int):
+            msg_name: int
+        else:
+            raise ValueError(f"msg_name passed to form_poll of type {type(msg_name)}, please use int or str")
+
+
+
+
 
     @staticmethod
     def signal_handler(ubp, signal, frame):
